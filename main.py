@@ -23,34 +23,52 @@ def flood_fill(start_x, start_y, pixels, image_width, image_height):
             min_y, max_y = min(min_y, y), max(max_y, y)
             for adj in get_adjacent_pixels(x, y, image_width, image_height):
                 to_fill.appendleft(adj)
-    # Calculate the area of the bounding box
     area = (max_x - min_x + 1) * (max_y - min_y + 1)
     return filled, (min_x, min_y, max_x + 1, max_y + 1), area
 
-def find_bricks(image_path, output_folder):
+def find_bricks(image_path, output_base_folder):
     with Image.open(image_path) as img:
         img = img.convert("RGBA")
         pixels = img.load()
 
         visited = set()
-        brick_num = 0
+        brick_num = [0, 0, 0]  # Index 0 for false positives, 1 for detected bricks, 2 for larger than nominal
 
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        # Define the folders for different size ranges
+        folders = {
+            'false_positives': os.path.join(output_base_folder, 'false_positives'),
+            'detected_bricks': os.path.join(output_base_folder, 'detected_bricks'),
+            'larger_than_nominal': os.path.join(output_base_folder, 'larger_than_nominal')
+        }
+
+        # Create the directories if they don't exist
+        for folder in folders.values():
+            if not os.path.exists(folder):
+                os.makedirs(folder)
 
         for x in range(img.width):
             for y in range(img.height):
                 if (x, y) not in visited and pixels[x, y][3] > 0:
                     brick_pixels, bounding_box, area = flood_fill(x, y, pixels, img.width, img.height)
-                    if area >= 50:  # Only accept regions larger than 50px^2
-                        visited.update(brick_pixels)
-                        brick_image = img.crop(bounding_box)
-                        brick_image.save(os.path.join(output_folder, f'brick_{brick_num}.png'))
-                        brick_num += 1
+                    # Decide which folder to use based on the area
+                    if area < 500:
+                        folder = folders['false_positives']
+                        index = 0
+                    elif area <= 5000:
+                        folder = folders['detected_bricks']
+                        index = 1
+                    else:
+                        folder = folders['larger_than_nominal']
+                        index = 2
 
-# Define the source image path and the output folder
+                    visited.update(brick_pixels)
+                    brick_image = img.crop(bounding_box)
+                    brick_image.save(os.path.join(folder, f'brick_{brick_num[index]}.png'))
+                    brick_num[index] += 1
+
+# Define the source image path and the output base folder
 image_path = '/Users/ryanhuang/Documents/GitHub/export-bricks/The_first_one.png'
-output_folder = '/Users/ryanhuang/Documents/GitHub/export-bricks/bricks_output'
+output_base_folder = '/Users/ryanhuang/Documents/GitHub/export-bricks/bricks_output'
 
 # Find and save the bricks
-find_bricks(image_path, output_folder)
+find_bricks(image_path, output_base_folder)
